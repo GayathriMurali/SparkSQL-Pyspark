@@ -6,63 +6,68 @@ import os
 
 sc = SparkContext("local", "Test sql queries from pyspark")
 
-#Test: if sqlcontext and hivecontext are created
+#Change this variable to point to your spak 1.5 example resources
+examplefiles_path="/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/"
+
+
+#Test 1: Sqlcontext and Hivecontext are created
 sqlContext = SQLContext(sc)
 hivecontext = HiveContext(sc)
    
-#Test: Read from a parquet file using sql and hive context
-df_sql=sqlContext.read.load("/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/users.parquet")
-df_hive=hivecontext.read.load("/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/users.parquet")
+#Test 2: Read from a parquet file using sql and hive context into a dataframe. Display and do some filter operations on the dataframe
+df_sql=sqlContext.read.load(examplefiles_path + "users.parquet")
+df_hive=hivecontext.read.load(examplefiles_path + "users.parquet")
+
 df_sql.show()
 df_hive.show()
+
 df_hive.printSchema()
+
 df_hive.filter(df_hive['favorite_color']=='red').show()
 
-#Test: Write selected columns from dataframe into a parquet file
-if not os.path.exists("/Users/gayathrimurali/sparksql_example/nameAndFavColors.parquet"):
-   df_hive.select("name","favorite_color").write.save("/Users/gayathrimurali/sparksql_example/nameAndFavColors.parquet")
+#Test 3: Write selected columns from dataframe into a parquet file
 
-#Test : save dataframe as persistent hive table using hivecontext
-#if not hivecontext.sql("SHOW TABLES LIKE '" + users + "'").collect().length == 1:
-   df_hive.write.saveAsTable("users")
+if not os.path.exists(examplefiles_path + "nameAndFavColors.parquet"):
+   df_hive.select("name","favorite_color").write.save(examplefiles_path + "nameAndFavColors.parquet")
 
-#Test : read from the hive table into a parquet file
+#Test 4: Save dataframe as persistent hive table using hivecontext
+hivecontext.sql("DROP TABLE IF EXISTS users")
+df_hive.write.saveAsTable("users")
+
+
+#Test 5: Read from the hive table into a parquet file
 colorRed=hivecontext.sql("SELECT * FROM users WHERE favorite_color=='red' ")
 colorRed.show()
-if not os.path.exists("/Users/gayathrimurali/sparksql_example/red.parquet"):
-   colorRed.write.parquet("red.parquet")
+if not os.path.exists(examplefiles_path + "red.parquet"):
+   colorRed.write.parquet(examplefiles_path + "red.parquet")
 
-#Test : Create and read from a parquet hive table using hivecontext
-hivecontext.setConf("spark.sql.hive.convertMetastoreParquet", "false")
-hivecontext.sql("CREATE TABLE IF NOT EXISTS  parquetTests(name STRING,favorite_color STRING,favorite_numbers ARRAY<INT>) ROW FORMAT SERDE 'parquet.hive.serde.ParquetHiveSerDe' STORED AS INPUTFORMAT 'parquet.hive.DeprecatedParquetInputFormat' OUTPUTFORMAT 'parquet.hive.DeprecatedParquetOutputFormat'")
-hivecontext.sql("LOAD DATA LOCAL INPATH '/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/users.parquet' INTO TABLE parquetTests")
+#Test 6: Create Parquet hive table. Read data from a parquet file and store it in the table
+filepath=examplefiles_path + "users.parquet"
+load_query="LOAD DATA LOCAL INPATH '"+filepath+"'OVERWRITE INTO TABLE parquetTests"
+hivecontext.sql("CREATE TABLE IF NOT EXISTS  parquetTests(name STRING,favorite_color STRING,favorite_numbers ARRAY<INT>) STORED AS PARQUET")
+hivecontext.sql(load_query)
 results=hivecontext.sql("SELECT * FROM parquetTests")
 results.show()
-#results.filter(results['favorite_color']=='red').show()
-#for i in results:
-#   print(i)
 
-#Test : Write into a parquet hive table
-#hivecontext.sql("INSERT overwrite parquetTests select * from users")
+#Test 7 : Create a table from the avro example file. Select all the data from the avro table and write it to the parquet table. All in hive context
+filepath=examplefiles_path + "users.avro"
+load_query="LOAD DATA LOCAL INPATH '"+filepath+"'OVERWRITE INTO TABLE avroTests"
+
+hivecontext.sql("CREATE TABLE IF NOT EXISTS avroTests(name STRING,favorite_color STRING,favorite_numbers ARRAY<INT>) STORED AS AVRO")
+hivecontext.sql(load_query)
+hivecontext.sql("INSERT INTO TABLE parquetTests SELECT * FROM avroTests")
+results=hivecontext.sql("SELECT * FROM parquetTests")
+results.show()
 
 
-#############py.test code##################
+##############Scraped code#################################################
+#Test : Use Regex serde to store text file
 
+#hivecontext.sql("CREATE TABLE IF NOT EXISTS serde_regex(host STRING,identity STRING,user STRING,time STRING,request STRING,status STRING,size STRING,referer STRING,agent STRING) ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe' WITH SERDEPROPERTIES ('input.regex' = '([^]*) ([^]*) ([^]*) (-|\\[^\\]*\\) ([^ \"]*|\"[^\"]*\") (-|[0-9]*) (-|[0-9]*)(?: ([^ \"]*|\".*\") ([^ \"]*|\".*\"))?', 'output.format.string' = '%1$s %2$s %3$s %4$s %5$s %6$s %7$s %8$s %9$s') STORED AS TEXTFILE") 
 
-#def test_context():
-#   assert func()
-  
-#Test Read from a parquet file using sql and hive context
-#def func():
-#   df_sql=sqlContext.read.load("/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/users.parquet")
-#   df_hive=hivecontext.read.load("/Users/gayathrimurali/spark-1.5.1/examples/src/main/resources/users.parquet")
-#   if(df_hive.select("name","favorite_color").write.save("/Users/gayathrimurali/sparksql_example/nameAndFavColors.parquet")):
-#	print("write successful")
-#	return 1
-#   else:
-#	return 0
-#   df_sql.select("name","favorite_color")
-     
-#def test_read():
-#   assert func()==1
+#hivecontext.sql("LOAD DATA LOCAL INPATH '/Users/gayathrimurali/spark-1.5.1/sql/hive/src/test/resources/data/files/apache.access.log' OVERWRITE INTO TABLE serde_regex")
+
+#results=hivecontext.sql("SELECT * FROM serde_regex")
+#results.show()
+
 
